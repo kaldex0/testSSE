@@ -116,12 +116,12 @@ if env_bool('USE_SQLITE', True):
 else:
     DATABASES = {
         'default': {
-            'ENGINE': os.getenv('django.db.backends.postgresql'),
-            'NAME': os.getenv('test_accueil'),
-            'USER': os.getenv('alexandre'),
-            'PASSWORD': os.getenv('alexdk1183'),
-            'HOST': os.getenv('localhost'),
-            'PORT': os.getenv('5432'),
+            'ENGINE': os.getenv('DB_ENGINE', 'django.db.backends.postgresql'),
+            'NAME': os.getenv('DB_NAME', 'test_accueil'),
+            'USER': os.getenv('DB_USER', 'postgres'),
+            'PASSWORD': os.getenv('DB_PASSWORD', ''),
+            'HOST': os.getenv('DB_HOST', 'localhost'),
+            'PORT': os.getenv('DB_PORT', '5432'),
         }
     }
 
