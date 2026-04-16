@@ -80,7 +80,7 @@ def _draw_wrapped_text(pdf, text, x, y, max_width, font_name, font_size, leading
 	return y
 
 
-def _draw_header(pdf, width, height, margin_x, participant, logo_path):
+def _draw_header(pdf, width, height, margin_x, participant, logo_path, test_label="Test Accueil SSE"):
 	y = height - 2 * cm
 	logo_size = 1.6 * cm
 	text_x = margin_x
@@ -101,7 +101,7 @@ def _draw_header(pdf, width, height, margin_x, participant, logo_path):
 
 	pdf.setFillColor(colors.HexColor("#0f172a"))
 	pdf.setFont("Helvetica-Bold", 16)
-	pdf.drawString(text_x, y, "Test Accueil SSE")
+	pdf.drawString(text_x, y, test_label)
 	pdf.setFillColor(colors.HexColor("#475569"))
 	pdf.setFont("Helvetica", 11)
 	pdf.drawString(text_x, y - 14, "Goron systemes")
@@ -141,6 +141,101 @@ def _draw_section_title(pdf, title, x, y, width):
 	return y - 24
 
 
+def _extract_questionnaire_rows(payload, answers):
+	questionnaire = payload.get("questionnaire")
+	if isinstance(questionnaire, list):
+		rows = []
+		for item in questionnaire:
+			if not isinstance(item, dict):
+				continue
+			label = str(item.get("label") or "").strip()
+			if not label:
+				continue
+			index = item.get("index")
+			if isinstance(index, int):
+				question_label = f"Q{index}. {label}"
+			else:
+				question_label = label
+			answer = str(item.get("answer") or "").strip() or "-"
+			rows.append((question_label, answer))
+		if rows:
+			return rows
+
+	return [
+		("Q1. Quels sont les 3 domaines d'application du MASE ?", answers.get("q1")),
+		("Q2. Citez au moins 4 bons gestes en matière de santé - hygiène de vie :", answers.get("q2")),
+		("Q3. Comment limiter les problèmes de santé liés au travail sur écran ?", answers.get("q3")),
+		("Q4. Sur 600 accidents, combien sont mortels ?", answers.get("q4")),
+		("Q5. À quoi sert un plan de prévention en sécurité au travail ?", answers.get("q5")),
+		("Q6. Que signifie le sigle EPI dans la sécurité au travail ?", answers.get("q6")),
+		("Q7. Citez 4 sortes d'EPI ?", answers.get("q7")),
+		("Q8. Grâce à quel type d'éléments pouvons-nous réduire les risques sur les chantiers ?", answers.get("q8")),
+		("Q9. À quoi correspondent les pictogrammes suivants ?", answers.get("q9")),
+		("Q10. Que dois-je faire face à un interlocuteur virulent ?", answers.get("q10")),
+		("Q11. Quels sont, dans le bon ordre chronologique, les 3 principes des premiers secours ?", answers.get("q11")),
+		("Q12. Pour faire des économies et être plus écologique, je peux :", answers.get("q12")),
+		("Q13. Quels gestes sont préconisés par l'écoconduite ?", answers.get("q13")),
+		("Q14. Dans le cadre de notre démarche, vous serez invités à :", answers.get("q14")),
+	]
+
+
+def _build_questionnaire_from_results(qcm_results, free_results):
+	rows = []
+	index = 1
+
+	if isinstance(qcm_results, list):
+		for item in qcm_results:
+			if not isinstance(item, dict):
+				continue
+			label = str(item.get("label") or "").strip()
+			if not label:
+				continue
+			selected = str(item.get("selected") or "").strip() or "-"
+			rows.append(
+				{
+					"index": index,
+					"id": str(item.get("id") or f"qcm-{index}"),
+					"label": label,
+					"section": "qcm",
+					"type": "qcm",
+					"answer": selected,
+				}
+			)
+			index += 1
+
+	if isinstance(free_results, list):
+		for item in free_results:
+			if not isinstance(item, dict):
+				continue
+			label = str(item.get("label") or "").strip()
+			if not label:
+				continue
+			answer = str(item.get("answer") or "").strip()
+			if not answer and isinstance(item.get("pictograms"), list):
+				parts = []
+				for picto in item.get("pictograms"):
+					if not isinstance(picto, dict):
+						continue
+					picto_answer = str(picto.get("answer") or "").strip()
+					if picto_answer:
+						parts.append(picto_answer)
+				answer = " | ".join(parts)
+			answer = answer or "-"
+			rows.append(
+				{
+					"index": index,
+					"id": str(item.get("id") or f"free-{index}"),
+					"label": label,
+					"section": "libre",
+					"type": "libre",
+					"answer": answer,
+				}
+			)
+			index += 1
+
+	return rows
+
+
 def _yes_no(value):
 	if value is True:
 		return "Oui"
@@ -149,6 +244,15 @@ def _yes_no(value):
 	if isinstance(value, str):
 		return "Oui" if value.lower() in {"oui", "yes", "true"} else "Non"
 	return "Non"
+
+
+def _extract_test_type(payload):
+	if not isinstance(payload, dict):
+		return "test-accueil"
+	test_type = str(payload.get("testType") or "").strip()
+	if test_type in {"test-accueil", "stagiaire", "technicien", "service-administratif"}:
+		return test_type
+	return "test-accueil"
 
 
 def _is_data_url(value):
@@ -174,44 +278,30 @@ def _render_pdf(pdf, payload):
 	result = payload.get("result", {})
 	signatures = payload.get("signatures", {})
 	observations = payload.get("observations", {})
+	test_label = str(payload.get("testLabel") or "Test Accueil SSE")
 
 	width, height = A4
 	margin_x = 2 * cm
 	logo_path = LOGO_PATH
 
-	y = _draw_header(pdf, width, height, margin_x, participant, logo_path)
+	y = _draw_header(pdf, width, height, margin_x, participant, logo_path, test_label)
 	max_width = width - 2 * margin_x
 	y = _draw_section_title(pdf, "Questionnaire", margin_x, y, max_width)
 
 	pdf.setFont("Helvetica", 10)
 	max_width = width - 2 * margin_x
 
-	questions = [
-		("Quels sont les 3 domaines d'application du MASE ?", answers.get("q1")),
-		("Citez au moins 4 bons gestes en matière de santé - hygiène de vie :", answers.get("q2")),
-		("Comment limiter les problèmes de santé liés au travail sur écran ?", answers.get("q3")),
-		("Sur 600 accidents, combien sont mortels ?", answers.get("q4")),
-		("À quoi sert un plan de prévention en sécurité au travail ?", answers.get("q5")),
-		("Que signifie le sigle EPI dans la sécurité au travail ?", answers.get("q6")),
-		("Citez 4 sortes d'EPI ?", answers.get("q7")),
-		("Grâce à quel type d'éléments pouvons-nous réduire les risques sur les chantiers ?", answers.get("q8")),
-		("À quoi correspondent les pictogrammes suivants ?", answers.get("q9")),
-		("Que dois-je faire face à un interlocuteur virulent ?", answers.get("q10")),
-		("Quels sont, dans le bon ordre chronologique, les 3 principes des premiers secours ?", answers.get("q11")),
-		("Pour faire des économies et être plus écologique, je peux :", answers.get("q12")),
-		("Quels gestes sont préconisés par l'écoconduite ?", answers.get("q13")),
-		("Dans le cadre de notre démarche, vous serez invités à :", answers.get("q14")),
-	]
+	questions = _extract_questionnaire_rows(payload, answers)
 
 	for index, (label, value) in enumerate(questions, start=1):
 		if y < 5 * cm:
 			pdf.showPage()
-			y = _draw_header(pdf, width, height, margin_x, participant, logo_path)
+			y = _draw_header(pdf, width, height, margin_x, participant, logo_path, test_label)
 			y = _draw_section_title(pdf, "Questionnaire (suite)", margin_x, y, max_width)
 			pdf.setFont("Helvetica", 10)
 
 		pdf.setFont("Helvetica-Bold", 10)
-		question_label = f"Q{index}. {label}"
+		question_label = label if str(label).startswith("Q") else f"Q{index}. {label}"
 		y = _draw_wrapped_text(pdf, question_label, margin_x, y, max_width, "Helvetica-Bold", 10)
 		pdf.setFont("Helvetica", 10)
 		if isinstance(value, list):
@@ -224,13 +314,15 @@ def _render_pdf(pdf, payload):
 
 	if y < 7 * cm:
 		pdf.showPage()
-		y = _draw_header(pdf, width, height, margin_x, participant, logo_path)
+		y = _draw_header(pdf, width, height, margin_x, participant, logo_path, test_label)
 
 	y = _draw_section_title(pdf, "Résultat", margin_x, y, max_width)
 	pdf.setFont("Helvetica", 10)
+	pdf.drawString(margin_x, y, f"Type de test : {test_label}")
+	y -= 16
 	pdf.drawString(margin_x, y, f"Résultat : {result.get('score', '')} /20")
 	y -= 16
-	pdf.drawString(margin_x, y, f"Test Accueil SSE validé : {_yes_no(result.get('validé'))}")
+	pdf.drawString(margin_x, y, f"Test validé : {_yes_no(result.get('validé'))}")
 	y -= 14
 	pdf.drawString(margin_x, y, f"Renforcement ultérieur : {_yes_no(result.get('renforcement'))}")
 	y -= 14
@@ -239,7 +331,7 @@ def _render_pdf(pdf, payload):
 
 	if y < 8 * cm:
 		pdf.showPage()
-		y = _draw_header(pdf, width, height, margin_x, participant, logo_path)
+		y = _draw_header(pdf, width, height, margin_x, participant, logo_path, test_label)
 
 	y = _draw_section_title(pdf, "Signatures", margin_x, y, max_width)
 	pdf.setFont("Helvetica", 10)
@@ -283,7 +375,7 @@ def _render_pdf(pdf, payload):
 
 	if y < 6 * cm:
 		pdf.showPage()
-		y = _draw_header(pdf, width, height, margin_x, participant, logo_path)
+		y = _draw_header(pdf, width, height, margin_x, participant, logo_path, test_label)
 
 	y = _draw_section_title(pdf, "Observations", margin_x, y, max_width)
 	pdf.setFont("Helvetica", 10)
@@ -387,6 +479,7 @@ def list_test_submissions(request):
 	date_from = (request.query_params.get("date_from") or "").strip()
 	date_to = (request.query_params.get("date_to") or "").strip()
 	status_filter = (request.query_params.get("status") or "all").strip()
+	test_type_filter = (request.query_params.get("test_type") or "all").strip()
 	sort_by = (request.query_params.get("sort") or "recent").strip()
 
 	try:
@@ -428,6 +521,8 @@ def list_test_submissions(request):
 		submissions_qs = submissions_qs.filter(score20__lte=score_max)
 	if status_filter in {"to_review", "in_progress", "validated"}:
 		submissions_qs = submissions_qs.filter(pdf_payload__workflow__status=status_filter)
+	if test_type_filter in {"test-accueil", "stagiaire", "technicien", "service-administratif"}:
+		submissions_qs = submissions_qs.filter(pdf_payload__testType=test_type_filter)
 
 	if sort_by == "score-desc":
 		submissions_qs = submissions_qs.order_by(F("score20").desc(nulls_last=True), "-created_at")
@@ -461,6 +556,7 @@ def list_test_submissions(request):
 			"prénom": item["participant_prenom"],
 			"date": item["participant_date"].isoformat() if item["participant_date"] else None,
 			"score20": item["score20"],
+			"testType": _extract_test_type(item.get("pdf_payload") or {}),
 			"workflowStatus": (
 				(item.get("pdf_payload") or {}).get("workflow", {}).get("status")
 				if isinstance((item.get("pdf_payload") or {}).get("workflow"), dict)
@@ -514,6 +610,7 @@ def test_submission_detail(request, submission_id):
 				"prénom": submission.participant_prenom,
 				"date": submission.participant_date.isoformat() if submission.participant_date else None,
 				"score20": submission.score20,
+				"testType": _extract_test_type(submission.pdf_payload or {}),
 				"stats": submission.stats,
 				"qcmResults": submission.qcm_results,
 				"freeResults": submission.free_results,
@@ -608,8 +705,14 @@ def test_submission_pdf(request, submission_id):
 	else:
 		response["Content-Disposition"] = "attachment; filename=\"test_accueil_sse.pdf\""
 
+	render_payload = submission.pdf_payload or {}
+	if not isinstance(render_payload.get("questionnaire"), list):
+		derived_questionnaire = _build_questionnaire_from_results(submission.qcm_results, submission.free_results)
+		if derived_questionnaire:
+			render_payload = {**render_payload, "questionnaire": derived_questionnaire}
+
 	pdf = canvas.Canvas(response, pagesize=A4, pageCompression=1)
-	_render_pdf(pdf, submission.pdf_payload or {})
+	_render_pdf(pdf, render_payload)
 	pdf.showPage()
 	pdf.save()
 

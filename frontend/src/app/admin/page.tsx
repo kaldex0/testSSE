@@ -4,7 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Toaster, toast } from "react-hot-toast";
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+const resolveApiBase = () => {
+  const configuredBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+  if (configuredBase) {
+    return configuredBase;
+  }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:8000";
+    }
+  }
+  return "";
+};
+const API_BASE = resolveApiBase();
 const TOKEN_KEY = "adminJwtToken";
 const REFRESH_TOKEN_KEY = "adminJwtRefreshToken";
 const AUTO_SAVE_INTERVAL_MS = 8000; // 8 seconds entre chaque sauvegarde automatique
@@ -33,6 +46,7 @@ type TestListItem = {
   prénom: string;
   date: string | null;
   score20: number | null;
+  testType: "test-accueil" | "stagiaire" | "technicien" | "service-administratif";
   workflowStatus: "to_review" | "in_progress" | "validated";
   validatedAt: string | null;
   validatedBy: string | null;
@@ -41,6 +55,7 @@ type TestListItem = {
 };
 
 type StatusFilter = "all" | "to_review" | "in_progress" | "validated";
+type TestTypeFilter = "all" | "test-accueil" | "stagiaire" | "technicien" | "service-administratif";
 type SortOption = "recent" | "score-desc" | "score-asc" | "date-desc" | "date-asc";
 
 type TestListResponse = {
@@ -57,6 +72,7 @@ type TestDetail = {
   prénom: string;
   date: string | null;
   score20: number | null;
+  testType?: "test-accueil" | "stagiaire" | "technicien" | "service-administratif";
   workflowStatus?: "to_review" | "in_progress" | "validated";
   validatedAt?: string | null;
   validatedBy?: string | null;
@@ -130,6 +146,7 @@ export default function AdminTestsPage() {
   const [scoreMin, setScoreMin] = useState("");
   const [scoreMax, setScoreMax] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [testTypeFilter, setTestTypeFilter] = useState<TestTypeFilter>("all");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -326,6 +343,9 @@ export default function AdminTestsPage() {
       if (statusFilter !== "all") {
         params.set("status", statusFilter);
       }
+      if (testTypeFilter !== "all") {
+        params.set("test_type", testTypeFilter);
+      }
       params.set("sort", sortBy);
 
       const response = await authorizedFetch(`/api/admin/tests?${params.toString()}`);
@@ -355,6 +375,7 @@ export default function AdminTestsPage() {
     searchQuery,
     sortBy,
     statusFilter,
+    testTypeFilter,
   ]);
 
   useEffect(() => {
@@ -494,6 +515,7 @@ export default function AdminTestsPage() {
     setScoreMin("");
     setScoreMax("");
     setStatusFilter("all");
+    setTestTypeFilter("all");
     setSortBy("recent");
     setCurrentPage(1);
   };
@@ -539,6 +561,21 @@ export default function AdminTestsPage() {
     return valid
       ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
       : "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300";
+  };
+
+  const getTestTypeLabel = (
+    testType: "test-accueil" | "stagiaire" | "technicien" | "service-administratif" | undefined,
+  ) => {
+    if (testType === "stagiaire") {
+      return "Stagiaire";
+    }
+    if (testType === "technicien") {
+      return "Technicien";
+    }
+    if (testType === "service-administratif") {
+      return "Service administratif";
+    }
+    return "Test accueil";
   };
 
   const buildReviewPayload = useCallback(
@@ -825,6 +862,10 @@ export default function AdminTestsPage() {
     setCurrentPage(1);
   }, [searchQuery, dateFrom, dateTo, scoreMin, scoreMax, statusFilter, sortBy]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [testTypeFilter]);
+
   const pageStart = totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const pageEnd = totalCount === 0 ? 0 : Math.min(pageStart + tests.length - 1, totalCount);
 
@@ -978,6 +1019,17 @@ export default function AdminTestsPage() {
               <option value="validated">Statut: validé</option>
             </select>
             <select
+              value={testTypeFilter}
+              onChange={(event) => setTestTypeFilter(event.target.value as TestTypeFilter)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+            >
+              <option value="all">Type: Tous</option>
+              <option value="test-accueil">Type: Test accueil</option>
+              <option value="stagiaire">Type: Stagiaire</option>
+              <option value="technicien">Type: Technicien</option>
+              <option value="service-administratif">Type: Service administratif</option>
+            </select>
+            <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as SortOption)}
               className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
@@ -1035,6 +1087,9 @@ export default function AdminTestsPage() {
                 <div className="flex flex-col items-start justify-between gap-1 sm:flex-row sm:items-center sm:gap-2">
                   <span className="font-semibold">{item.nom} {item.prénom}</span>
                   <div className="flex w-full flex-wrap items-center gap-1 sm:w-auto">
+                    <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">
+                      {getTestTypeLabel(item.testType)}
+                    </span>
                     <span
                       className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${getResultBadgeClass(item.isValidated)}`}
                     >
@@ -1094,7 +1149,9 @@ export default function AdminTestsPage() {
               <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
                 <div>
                   <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">{selectedLabel}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Test #{detail.id} · {detail.date || "-"}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Test #{detail.id} · {detail.date || "-"} · {getTestTypeLabel(detail.testType)}
+                  </p>
                 </div>
                 <button
                   type="button"

@@ -88,7 +88,20 @@ const pictograms = [
 
 const FREE_TEXT_MAX_CHARS = 280;
 const PICTOGRAM_TEXT_MAX_CHARS = 90;
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+const resolveApiBase = () => {
+  const configuredBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+  if (configuredBase) {
+    return configuredBase;
+  }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:8000";
+    }
+  }
+  return "";
+};
+const API_BASE = resolveApiBase();
 
 const limitText = (value: string, maxChars: number) => value.slice(0, maxChars);
 
@@ -883,6 +896,14 @@ export default function Home() {
     const overallTotal = qcmTotal + freeTotal;
     const overallScore20 =
       overallTotal > 0 ? Math.round((overallCorrect / overallTotal) * 200) / 10 : 0;
+    const questionnaireForPdf = allQuestions.map((question, index) => ({
+      index: index + 1,
+      id: question.id,
+      label: question.label,
+      section: question.section,
+      type: question.type,
+      answer: getQuestionSummaryAnswer(question),
+    }));
 
     return {
       stats: {
@@ -898,11 +919,14 @@ export default function Home() {
       qcmResults,
       freeResults,
       pdfPayload: {
+        testType: activeTestType,
+        testLabel: TEST_PROFILES[activeTestType].label,
         participant: {
           nom: participant.nom.trim(),
           prénom: participant.prénom.trim(),
           date: new Date().toISOString().slice(0, 10),
         },
+        questionnaire: questionnaireForPdf,
         answers: activeTestType === "test-accueil" ? accueilPdfAnswers : dynamicPdfAnswers,
         result: {
           score: String(overallScore20),

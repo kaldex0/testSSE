@@ -62,7 +62,20 @@ type Submission = {
   };
 };
 
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+const resolveApiBase = () => {
+  const configuredBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? "").replace(/\/$/, "");
+  if (configuredBase) {
+    return configuredBase;
+  }
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      return "http://localhost:8000";
+    }
+  }
+  return "";
+};
+const API_BASE = resolveApiBase();
 
 export default function ResultatsPage() {
   const router = useRouter();
