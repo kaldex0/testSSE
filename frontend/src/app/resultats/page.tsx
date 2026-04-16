@@ -40,6 +40,8 @@ type Submission = {
   qcmResults: QcmResult[];
   freeResults: FreeResult[];
   pdfPayload: {
+    testLabel?: string;
+    testType?: "test-accueil" | "stagiaire" | "technicien" | "service-administratif";
     participant: {
       nom: string;
       prénom: string;
@@ -60,6 +62,20 @@ type Submission = {
       animateur: string;
     };
   };
+};
+
+const normalizeFilenamePart = (value: string | undefined) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "");
+
+const buildCandidatePdfFilename = (submission: Submission) => {
+  const nom = normalizeFilenamePart(submission.pdfPayload?.participant?.nom);
+  const prenom = normalizeFilenamePart(submission.pdfPayload?.participant?.prénom);
+  const testLabel = normalizeFilenamePart(submission.pdfPayload?.testLabel || "TestAccueil");
+  const base = `${nom}${prenom}${testLabel}` || "TestAccueil";
+  return `${base}.pdf`;
 };
 
 const resolveApiBase = () => {
@@ -133,7 +149,7 @@ export default function ResultatsPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = "test_accueil_sse.pdf";
+      link.download = buildCandidatePdfFilename(submission);
       document.body.appendChild(link);
       link.click();
       link.remove();

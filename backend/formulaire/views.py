@@ -4,6 +4,8 @@ import json
 import os
 import math
 import logging
+import re
+import unicodedata
 from datetime import date
 
 from django.http import HttpResponse, JsonResponse
@@ -255,6 +257,39 @@ def _extract_test_type(payload):
 	return "test-accueil"
 
 
+def _normalize_filename_part(value):
+	text = str(value or "").strip()
+	if not text:
+		return ""
+	text = unicodedata.normalize("NFKD", text)
+	text = "".join(char for char in text if not unicodedata.combining(char))
+	text = re.sub(r"[^A-Za-z0-9]+", "", text)
+	return text
+
+
+def _build_candidate_pdf_filename(payload):
+	participant = payload.get("participant") if isinstance(payload.get("participant"), dict) else {}
+	nom = _normalize_filename_part(participant.get("nom"))
+	prenom = _normalize_filename_part(participant.get("prénom"))
+	test_label = _normalize_filename_part(payload.get("testLabel") or "TestAccueil")
+	base = f"{nom}{prenom}{test_label}".strip() or "TestAccueil"
+	return f"{base}.pdf"
+
+
+def _build_admin_pdf_filename(submission):
+	nom = _normalize_filename_part(submission.participant_nom)
+	prenom = _normalize_filename_part(submission.participant_prenom)
+	test_type = _extract_test_type(submission.pdf_payload or {})
+	test_type_label = {
+		"test-accueil": "TestAccueil",
+		"stagiaire": "TestStagiaire",
+		"technicien": "TestTechnicien",
+		"service-administratif": "TestServiceAdministratif",
+	}.get(test_type, "TestAccueil")
+	base = f"{nom}{prenom}{test_type_label}{submission.id}".strip() or f"Test{submission.id}"
+	return f"{base}.pdf"
+
+
 def _is_data_url(value):
 	return isinstance(value, str) and value.startswith("data:image")
 
@@ -403,7 +438,8 @@ def generate_pdf(request):
 		return JsonResponse({"error": "Invalid JSON"}, status=400)
 
 	response = HttpResponse(content_type="application/pdf")
-	response["Content-Disposition"] = "attachment; filename=\"test_accueil_sse.pdf\""
+	filename = _build_candidate_pdf_filename(payload)
+	response["Content-Disposition"] = f"attachment; filename=\"{filename}\""
 
 	pdf = canvas.Canvas(response, pagesize=A4, pageCompression=1)
 	_render_pdf(pdf, payload)
@@ -715,11 +751,12 @@ def test_submission_pdf(request, submission_id):
 	preview_mode = request.query_params.get("preview") == "1"
 
 	response = HttpResponse(content_type="application/pdf")
+	filename = _build_admin_pdf_filename(submission)
 	if preview_mode:
-		response["Content-Disposition"] = "inline; filename=\"test_accueil_sse_preview.pdf\""
+		response["Content-Disposition"] = f"inline; filename=\"preview_{filename}\""
 		response["Cache-Control"] = "private, max-age=60"
 	else:
-		response["Content-Disposition"] = "attachment; filename=\"test_accueil_sse.pdf\""
+		response["Content-Disposition"] = f"attachment; filename=\"{filename}\""
 
 	render_payload = submission.pdf_payload or {}
 	if not isinstance(render_payload.get("questionnaire"), list):

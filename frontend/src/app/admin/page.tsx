@@ -40,6 +40,32 @@ const isJwtExpiredOrSoon = (jwt: string, thresholdSeconds = 30) => {
   }
 };
 
+const normalizeFilenamePart = (value: string | undefined) =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "");
+
+const buildAdminPdfFilename = (detail: {
+  nom: string;
+  prénom: string;
+  id: number;
+  testType?: "test-accueil" | "stagiaire" | "technicien" | "service-administratif";
+}) => {
+  const nom = normalizeFilenamePart(detail.nom);
+  const prenom = normalizeFilenamePart(detail.prénom);
+  const testTypeLabel =
+    detail.testType === "stagiaire"
+      ? "TestStagiaire"
+      : detail.testType === "technicien"
+        ? "TestTechnicien"
+        : detail.testType === "service-administratif"
+          ? "TestServiceAdministratif"
+          : "TestAccueil";
+  const base = `${nom}${prenom}${testTypeLabel}${detail.id}` || `Test${detail.id}`;
+  return `${base}.pdf`;
+};
+
 type TestListItem = {
   id: number;
   nom: string;
@@ -761,7 +787,7 @@ export default function AdminTestsPage() {
       setPdfPreviewUrl(url);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `test_accueil_${detail.id}.pdf`;
+      link.download = buildAdminPdfFilename(detail);
       document.body.appendChild(link);
       link.click();
       link.remove();
