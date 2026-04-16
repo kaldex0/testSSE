@@ -418,6 +418,22 @@ def generate_pdf(request):
 def create_test_submission(request):
 	data = request.data or {}
 	payload = data.get("pdfPayload") or data.get("pdf_payload") or {}
+	if not isinstance(payload, dict):
+		payload = {}
+
+	# New submissions must always start as non-validated and pending review.
+	result_payload = payload.get("result") if isinstance(payload.get("result"), dict) else {}
+	result_payload["validé"] = False
+	if "correction" not in result_payload:
+		result_payload["correction"] = True
+	payload["result"] = result_payload
+
+	workflow_payload = payload.get("workflow") if isinstance(payload.get("workflow"), dict) else {}
+	workflow_payload["status"] = "to_review"
+	workflow_payload["validatedAt"] = None
+	workflow_payload["validatedBy"] = None
+	payload["workflow"] = workflow_payload
+
 	answers = payload.get("answers") if isinstance(payload.get("answers"), dict) else {}
 	if answers:
 		answers["q2"] = _truncate_text(answers.get("q2", ""), FREE_TEXT_MAX_CHARS)

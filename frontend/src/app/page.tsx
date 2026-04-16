@@ -155,7 +155,7 @@ const parseMarkdownQuiz = (markdownText: string, idPrefix: string, startIndex = 
   const questions: Question[] = [];
   let currentLabel = "";
   let options: Array<{ text: string; checked: boolean }> = [];
-  let matchingPairs: Array<{ leftKey: string; leftLabel: string; rightKey: string; rightLabel: string }> = [];
+  let matchingRows: Array<{ leftKey: string; leftLabel: string; rightKey: string; rightLabel: string }> = [];
   let questionCounter = startIndex;
   let lastMatchingLeft: { key: string; label: string } | null = null;
 
@@ -165,7 +165,33 @@ const parseMarkdownQuiz = (markdownText: string, idPrefix: string, startIndex = 
       return;
     }
 
-    if (matchingPairs.length > 0) {
+    if (matchingRows.length > 0) {
+      const leftItems = Array.from(
+        new Map(
+          matchingRows
+            .filter((row) => row.leftLabel.trim().length > 0)
+            .map((row) => [row.leftKey, row.leftLabel]),
+        ).entries(),
+      ).map(([leftKey, leftLabel]) => ({ leftKey, leftLabel }));
+
+      const rightByKey = new Map(
+        matchingRows
+          .filter((row) => row.rightLabel.trim().length > 0)
+          .map((row) => [row.rightKey, row.rightLabel]),
+      );
+
+      const pairsBySameKey =
+        leftItems.length > 0 && leftItems.every((item) => rightByKey.has(item.leftKey))
+          ? leftItems.map((item) => ({
+              leftKey: item.leftKey,
+              leftLabel: item.leftLabel,
+              rightKey: item.leftKey,
+              rightLabel: rightByKey.get(item.leftKey) || "",
+            }))
+          : [];
+
+      const matchingPairs = pairsBySameKey.length > 0 ? pairsBySameKey : matchingRows;
+
       questions.push({
         id: `${idPrefix}-${questionCounter}`,
         label,
@@ -190,7 +216,7 @@ const parseMarkdownQuiz = (markdownText: string, idPrefix: string, startIndex = 
     questionCounter += 1;
     currentLabel = "";
     options = [];
-    matchingPairs = [];
+    matchingRows = [];
     lastMatchingLeft = null;
   };
 
@@ -225,9 +251,9 @@ const parseMarkdownQuiz = (markdownText: string, idPrefix: string, startIndex = 
       const rightLabel = associationMatch[4].trim();
       if (leftLabel) {
         lastMatchingLeft = { key: leftKey, label: leftLabel };
-        matchingPairs.push({ leftKey, leftLabel, rightKey, rightLabel });
+        matchingRows.push({ leftKey, leftLabel, rightKey, rightLabel });
       } else if (lastMatchingLeft) {
-        matchingPairs.push({
+        matchingRows.push({
           leftKey: lastMatchingLeft.key,
           leftLabel: lastMatchingLeft.label,
           rightKey,
@@ -239,7 +265,7 @@ const parseMarkdownQuiz = (markdownText: string, idPrefix: string, startIndex = 
 
     const continuedAssociationMatch = line.match(/^\|\s*(\d+)\s+(.+)$/);
     if (continuedAssociationMatch && lastMatchingLeft) {
-      matchingPairs.push({
+      matchingRows.push({
         leftKey: lastMatchingLeft.key,
         leftLabel: lastMatchingLeft.label,
         rightKey: continuedAssociationMatch[1].trim(),
