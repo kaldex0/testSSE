@@ -8,10 +8,38 @@ import { useRouter } from "next/navigation";
 type Question = {
   id: string;
   label: string;
-  type: "radio" | "textarea" | "checkbox";
+  type: "radio" | "textarea" | "checkbox" | "association";
   options?: string[];
   section: "qcm" | "libre";
   correctAnswer?: string;
+  correctAnswers?: string[];
+  matchingPairs?: Array<{
+    leftKey: string;
+    leftLabel: string;
+    rightKey: string;
+    rightLabel: string;
+  }>;
+};
+
+type TestType = "test-accueil" | "stagiaire" | "technicien" | "service-administratif";
+
+const TEST_PROFILES: Record<TestType, { label: string; markdownFiles: string[] }> = {
+  "test-accueil": {
+    label: "Test Accueil SSE",
+    markdownFiles: [],
+  },
+  stagiaire: {
+    label: "Test Stagiaire",
+    markdownFiles: ["quiz1Elec.md", "quiz2Trouble.md", "quiz3PleinPied.md"],
+  },
+  technicien: {
+    label: "Test Technicien",
+    markdownFiles: ["quiz4RisqueHauteur.md", "quiz6EPI_EPC.md", "quiz7Amiante.md"],
+  },
+  "service-administratif": {
+    label: "Test Service Administratif",
+    markdownFiles: ["quiz5RisqueRoutier.md", "quiz8RisqueRPS.md"],
+  },
 };
 
 const freeQuestions: Question[] = [
@@ -104,11 +132,117 @@ const parseQcmCsv = (csvText: string) => {
       options,
       section: "qcm" as const,
       correctAnswer,
+      correctAnswers: correctAnswer ? [correctAnswer] : [],
     };
   });
 };
 
-type Answers = Record<string, string | string[]>;
+const parseMarkdownQuiz = (markdownText: string, idPrefix: string, startIndex = 1): Question[] => {
+  const lines = markdownText.split(/\r?\n/);
+  const questions: Question[] = [];
+  let currentLabel = "";
+  let options: Array<{ text: string; checked: boolean }> = [];
+  let matchingPairs: Array<{ leftKey: string; leftLabel: string; rightKey: string; rightLabel: string }> = [];
+  let questionCounter = startIndex;
+  let lastMatchingLeft: { key: string; label: string } | null = null;
+
+  const pushCurrentQuestion = () => {
+    const label = currentLabel.trim();
+    if (!label) {
+      return;
+    }
+
+    if (matchingPairs.length > 0) {
+      questions.push({
+        id: `${idPrefix}-${questionCounter}`,
+        label,
+        type: "association",
+        section: "qcm",
+        matchingPairs,
+        correctAnswers: matchingPairs.map((pair) => `${pair.leftKey}:${pair.rightKey}`),
+      });
+    } else if (options.length > 0) {
+      const correctAnswers = options.filter((option) => option.checked).map((option) => option.text);
+      questions.push({
+        id: `${idPrefix}-${questionCounter}`,
+        label,
+        type: correctAnswers.length > 1 ? "checkbox" : "radio",
+        section: "qcm",
+        options: options.map((option) => option.text),
+        correctAnswer: correctAnswers[0] || "",
+        correctAnswers,
+      });
+    }
+
+    questionCounter += 1;
+    currentLabel = "";
+    options = [];
+    matchingPairs = [];
+    lastMatchingLeft = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+
+    const questionStart = line.match(/^(\d+)\-\)\s*(.+)$/);
+    if (questionStart) {
+      pushCurrentQuestion();
+      currentLabel = questionStart[2].trim();
+      continue;
+    }
+
+    if (!currentLabel) {
+      continue;
+    }
+
+    const optionMatch = line.match(/^([☒☐❑])\s*(.+)$/);
+    if (optionMatch) {
+      options.push({ text: optionMatch[2].trim(), checked: optionMatch[1] === "☒" });
+      continue;
+    }
+
+    const associationMatch = line.match(/^(.*?)\s*(\d+)\s*\|\s*(\d+)\s+(.+)$/);
+    if (associationMatch) {
+      const leftLabel = associationMatch[1].trim();
+      const leftKey = associationMatch[2].trim();
+      const rightKey = associationMatch[3].trim();
+      const rightLabel = associationMatch[4].trim();
+      if (leftLabel) {
+        lastMatchingLeft = { key: leftKey, label: leftLabel };
+        matchingPairs.push({ leftKey, leftLabel, rightKey, rightLabel });
+      } else if (lastMatchingLeft) {
+        matchingPairs.push({
+          leftKey: lastMatchingLeft.key,
+          leftLabel: lastMatchingLeft.label,
+          rightKey,
+          rightLabel,
+        });
+      }
+      continue;
+    }
+
+    const continuedAssociationMatch = line.match(/^\|\s*(\d+)\s+(.+)$/);
+    if (continuedAssociationMatch && lastMatchingLeft) {
+      matchingPairs.push({
+        leftKey: lastMatchingLeft.key,
+        leftLabel: lastMatchingLeft.label,
+        rightKey: continuedAssociationMatch[1].trim(),
+        rightLabel: continuedAssociationMatch[2].trim(),
+      });
+      continue;
+    }
+
+    currentLabel = `${currentLabel} ${line}`.trim();
+  }
+
+  pushCurrentQuestion();
+  return questions;
+};
+
+type Answers = Record<string, string | string[] | Record<string, string>>;
 type ParticipantInfo = {
   nom: string;
   prénom: string;
@@ -118,8 +252,15 @@ const initialAnswers: Answers = {};
 
 export default function Home() {
   const router = useRouter();
-  const accessCodeMap: Record<string, "test-accueil"> = {
+  const accessCodeMap: Record<string, TestType> = {
     "0105": "test-accueil",
+    "2001": "stagiaire",
+    "2002": "technicien",
+    "2003": "service-administratif",
+    "stagiaire": "stagiaire",
+    "technicien": "technicien",
+    "administratif": "service-administratif",
+    "service-admin": "service-administratif",
   };
   const [theme, setTheme] = useState("light");
   const [accessCode, setAccessCode] = useState("");
@@ -137,6 +278,7 @@ export default function Home() {
   const signatureLastPointRef = useRef<{ x: number; y: number } | null>(null);
   const [identityConfirmed, setIdentityConfirmed] = useState(false);
   const [completionError, setCompletionError] = useState("");
+  const [activeTestType, setActiveTestType] = useState<TestType>("test-accueil");
   const [qcmQuestions, setQcmQuestions] = useState<Question[]>([]);
   const [qcmLoaded, setQcmLoaded] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -189,10 +331,15 @@ export default function Home() {
   };
 
   const handleAccessSubmit = () => {
-    const cleaned = accessCode.trim();
-    if (accessCodeMap[cleaned]) {
+    const cleaned = accessCode.trim().toLowerCase();
+    const selectedTestType = accessCodeMap[cleaned];
+    if (selectedTestType) {
+      setActiveTestType(selectedTestType);
       setAccessGranted(true);
       setAccessError("");
+      setAnswers({});
+      setCurrentIndex(0);
+      setShowFinalReview(false);
       return;
     }
     setAccessError("Code invalidé.");
@@ -224,16 +371,54 @@ export default function Home() {
     });
   };
 
+  const handleAssociationSelect = (id: string, leftKey: string, rightKey: string) => {
+    setAnswers((prev) => {
+      const current =
+        typeof prev[id] === "object" && !Array.isArray(prev[id]) && prev[id] !== null
+          ? { ...(prev[id] as Record<string, string>) }
+          : {};
+      current[leftKey] = rightKey;
+      return { ...prev, [id]: current };
+    });
+  };
+
   useEffect(() => {
     let cancelled = false;
+
     const loadQcm = async () => {
+      if (!accessGranted) {
+        setQcmQuestions([]);
+        setQcmLoaded(false);
+        return;
+      }
+
+      setQcmLoaded(false);
+
       try {
-        const response = await fetch("/reponseQCM.csv");
-        if (!response.ok) {
-          throw new Error("Impossible de charger reponseQCM.csv");
+        let parsed: Question[] = [];
+
+        if (activeTestType === "test-accueil") {
+          const response = await fetch("/reponseQCM.csv");
+          if (!response.ok) {
+            throw new Error("Impossible de charger reponseQCM.csv");
+          }
+          const text = await response.text();
+          parsed = parseQcmCsv(text);
+        } else {
+          const profile = TEST_PROFILES[activeTestType];
+          let counter = 1;
+          for (const fileName of profile.markdownFiles) {
+            const response = await fetch(`/questionnaires/${fileName}`);
+            if (!response.ok) {
+              throw new Error(`Impossible de charger ${fileName}`);
+            }
+            const text = await response.text();
+            const parsedQuestions = parseMarkdownQuiz(text, activeTestType, counter);
+            parsed.push(...parsedQuestions);
+            counter += parsedQuestions.length;
+          }
         }
-        const text = await response.text();
-        const parsed = parseQcmCsv(text);
+
         if (!cancelled) {
           setQcmQuestions(parsed);
         }
@@ -252,11 +437,16 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [accessGranted, activeTestType]);
+
+  const activeFreeQuestions = useMemo(
+    () => (activeTestType === "test-accueil" ? freeQuestions : []),
+    [activeTestType],
+  );
 
   const allQuestions = useMemo(
-    () => (qcmLoaded ? [...qcmQuestions, ...freeQuestions] : []),
-    [qcmLoaded, qcmQuestions],
+    () => (qcmLoaded ? [...qcmQuestions, ...activeFreeQuestions] : []),
+    [qcmLoaded, qcmQuestions, activeFreeQuestions],
   );
   const currentQuestion = allQuestions[currentIndex];
   const totalQuestions = allQuestions.length;
@@ -271,8 +461,10 @@ export default function Home() {
       allQuestions.forEach((question) => {
         if (!(question.id in next)) {
           next[question.id] =
-            question.id === "free-3"
+            question.id === "free-3" && activeTestType === "test-accueil"
               ? Array(pictograms.length).fill("")
+              : question.type === "association"
+                ? {}
               : question.type === "checkbox"
                 ? []
                 : "";
@@ -281,7 +473,7 @@ export default function Home() {
       });
       return changed ? next : prev;
     });
-  }, [allQuestions, qcmLoaded]);
+  }, [activeTestType, allQuestions, qcmLoaded]);
 
   useEffect(() => {
     if (totalQuestions === 0) {
@@ -335,6 +527,15 @@ export default function Home() {
       }
       if (question.type === "checkbox") {
         return Array.isArray(value) && value.length > 0;
+      }
+      if (question.type === "association") {
+        if (typeof value !== "object" || value === null || Array.isArray(value)) {
+          return false;
+        }
+        const leftKeys = Array.from(
+          new Set((question.matchingPairs || []).map((pair) => pair.leftKey)),
+        );
+        return leftKeys.every((leftKey) => Boolean((value as Record<string, string>)[leftKey]));
       }
       if (question.id === "free-3") {
         if (!Array.isArray(value)) {
@@ -403,6 +604,21 @@ export default function Home() {
           return "-";
         }
         return value.length > 0 ? value.join(", ") : "-";
+      }
+      if (question.type === "association") {
+        if (typeof value !== "object" || value === null || Array.isArray(value)) {
+          return "-";
+        }
+        const rightByKey = new Map(
+          (question.matchingPairs || []).map((pair) => [pair.rightKey, pair.rightLabel]),
+        );
+        const rows = Array.from(new Set((question.matchingPairs || []).map((pair) => pair.leftKey))).map((leftKey) => {
+          const leftLabel = (question.matchingPairs || []).find((pair) => pair.leftKey === leftKey)?.leftLabel || leftKey;
+          const selectedRightKey = (value as Record<string, string>)[leftKey];
+          const selectedRightLabel = rightByKey.get(selectedRightKey) || "?";
+          return selectedRightKey ? `${leftLabel} -> ${selectedRightLabel}` : `${leftLabel} -> ?`;
+        });
+        return rows.length > 0 ? rows.join(" | ") : "-";
       }
       if (typeof value === "string") {
         const trimmed = value.trim();
@@ -498,10 +714,58 @@ export default function Home() {
   };
 
   const buildSubmission = () => {
-    const scoreCorrect = qcmQuestions.reduce((count, question, index) => {
-      const selected = getAnswerText(`qcm-${index + 1}`);
-      return selected && selected === question.correctAnswer ? count + 1 : count;
-    }, 0);
+    const qcmResults = qcmQuestions.map((question) => {
+      const value = answers[question.id];
+      let selected = "";
+      let isCorrect = false;
+
+      if (question.type === "radio") {
+        selected = typeof value === "string" ? value : "";
+        const expected = question.correctAnswers?.[0] || question.correctAnswer || "";
+        isCorrect = Boolean(selected && expected && selected === expected);
+      } else if (question.type === "checkbox") {
+        const selectedValues = Array.isArray(value) ? value.map((item) => String(item)) : [];
+        selected = selectedValues.join(", ");
+        const expected = (question.correctAnswers || []).slice().sort();
+        const actual = selectedValues.slice().sort();
+        isCorrect =
+          expected.length > 0 &&
+          expected.length === actual.length &&
+          expected.every((item, index) => item === actual[index]);
+      } else if (question.type === "association") {
+        const selectedMap =
+          typeof value === "object" && value !== null && !Array.isArray(value)
+            ? (value as Record<string, string>)
+            : {};
+        const expectedPairs = question.matchingPairs || [];
+        const leftKeys = Array.from(new Set(expectedPairs.map((pair) => pair.leftKey)));
+        const rightByKey = new Map(expectedPairs.map((pair) => [pair.rightKey, pair.rightLabel]));
+        selected = leftKeys
+          .map((leftKey) => {
+            const leftLabel = expectedPairs.find((pair) => pair.leftKey === leftKey)?.leftLabel || leftKey;
+            const selectedRightKey = selectedMap[leftKey];
+            const rightLabel = rightByKey.get(selectedRightKey) || "?";
+            return `${leftLabel} -> ${rightLabel}`;
+          })
+          .join(" | ");
+        isCorrect =
+          expectedPairs.length > 0 &&
+          leftKeys.every((leftKey) => {
+            const expectedRight = expectedPairs.find((pair) => pair.leftKey === leftKey)?.rightKey;
+            return Boolean(expectedRight && selectedMap[leftKey] === expectedRight);
+          });
+      }
+
+      return {
+        id: question.id,
+        label: question.label,
+        selected,
+        correct: (question.correctAnswers || [question.correctAnswer || ""]).filter(Boolean).join(" | "),
+        isCorrect,
+      };
+    });
+
+    const qcmCorrect = qcmResults.filter((result) => result.isCorrect).length;
     const qcmTotal = qcmQuestions.length;
 
     const pictogramAnswers = Array.isArray(answers["free-3"])
@@ -558,7 +822,7 @@ export default function Home() {
       };
     });
 
-    const pdfAnswers = {
+    const accueilPdfAnswers = {
       q1: getAnswerText("qcm-1"),
       q2: getAnswerText("free-1"),
       q3: getAnswerText("qcm-2"),
@@ -575,18 +839,7 @@ export default function Home() {
       q14: getAnswerText("qcm-11"),
     };
 
-    const qcmResults = qcmQuestions.map((question, index) => {
-        const selected = getAnswerText(`qcm-${index + 1}`);
-        return {
-          id: question.id,
-          label: question.label,
-          selected,
-          correct: question.correctAnswer || "",
-          isCorrect: Boolean(selected && selected === question.correctAnswer),
-        };
-      });
-
-    const freeResults = [
+    const freeResultsAccueil = [
         {
           id: "free-1",
           label: "Citez au moins 4 bons gestes en matière de santé - hygiène de vie :",
@@ -618,9 +871,15 @@ export default function Home() {
         },
       ];
 
+    const dynamicPdfAnswers = qcmResults.slice(0, 14).reduce((acc, result, index) => {
+      acc[`q${index + 1}`] = result.selected;
+      return acc;
+    }, {} as Record<string, string>);
+
+    const freeResults = activeTestType === "test-accueil" ? freeResultsAccueil : [];
     const freeCorrect = freeResults.filter((item) => item.isCorrect).length;
     const freeTotal = freeResults.length;
-    const overallCorrect = scoreCorrect + freeCorrect;
+    const overallCorrect = qcmCorrect + freeCorrect;
     const overallTotal = qcmTotal + freeTotal;
     const overallScore20 =
       overallTotal > 0 ? Math.round((overallCorrect / overallTotal) * 200) / 10 : 0;
@@ -628,13 +887,14 @@ export default function Home() {
     return {
       stats: {
         scoreCorrect: overallCorrect,
-        qcmCorrect: scoreCorrect,
+        qcmCorrect,
         qcmTotal,
         freeCorrect,
         freeTotal,
         overallTotal,
         score20: overallScore20,
       },
+      testType: activeTestType,
       qcmResults,
       freeResults,
       pdfPayload: {
@@ -643,7 +903,7 @@ export default function Home() {
           prénom: participant.prénom.trim(),
           date: new Date().toISOString().slice(0, 10),
         },
-        answers: pdfAnswers,
+        answers: activeTestType === "test-accueil" ? accueilPdfAnswers : dynamicPdfAnswers,
         result: {
           score: String(overallScore20),
           validé: overallScore20 >= 10,
@@ -715,7 +975,7 @@ export default function Home() {
                 Goron Systemes
               </p>
               <h1 className="font-[var(--font-playfair)] text-2xl font-semibold text-slate-900 dark:text-white sm:text-4xl">
-                Test Accueil SSE
+                {TEST_PROFILES[activeTestType].label}
               </h1>
             </div>
           </div>
@@ -789,7 +1049,7 @@ export default function Home() {
                     QCM: <span className="font-semibold">{qcmAnsweredCount}/{qcmQuestions.length}</span>
                   </p>
                   <p>
-                    Réponses libres: <span className="font-semibold">{freeAnsweredCount}/{freeQuestions.length}</span>
+                    Réponses libres: <span className="font-semibold">{freeAnsweredCount}/{activeFreeQuestions.length}</span>
                   </p>
                 </div>
               </div>
@@ -945,7 +1205,11 @@ export default function Home() {
                 <span>{totalQuestions} questions</span>
               </div>
               <p className={questionSectionClass}>
-                {currentQuestion.section === "qcm" ? "QCM" : "Réponse libre"}
+                {currentQuestion.type === "association"
+                  ? "Association"
+                  : currentQuestion.section === "qcm"
+                    ? "QCM"
+                    : "Réponse libre"}
               </p>
               <h3 className={questionTitleClass}>
                 {currentQuestion.label}
@@ -1022,6 +1286,48 @@ export default function Home() {
                         )}
                         <span className="pointer-events-none">{isPlaceholder ? "" : option}</span>
                       </label>
+                    );
+                  })}
+                </div>
+              )}
+
+              {currentQuestion.type === "association" && (
+                <div className="mt-4 grid gap-3 sm:mt-6 sm:gap-4">
+                  {Array.from(new Set((currentQuestion.matchingPairs || []).map((pair) => pair.leftKey))).map((leftKey) => {
+                    const pairs = currentQuestion.matchingPairs || [];
+                    const leftLabel = pairs.find((pair) => pair.leftKey === leftKey)?.leftLabel || leftKey;
+                    const selectedMap =
+                      typeof answers[currentQuestion.id] === "object" &&
+                      answers[currentQuestion.id] !== null &&
+                      !Array.isArray(answers[currentQuestion.id])
+                        ? (answers[currentQuestion.id] as Record<string, string>)
+                        : {};
+                    const selected = selectedMap[leftKey] || "";
+                    const rightOptions = Array.from(
+                      new Map(pairs.map((pair) => [pair.rightKey, pair.rightLabel])).entries(),
+                    );
+
+                    return (
+                      <div
+                        key={`${currentQuestion.id}-${leftKey}`}
+                        className="rounded-2xl border border-slate-200 p-3 dark:border-slate-700"
+                      >
+                        <p className="mb-2 text-sm font-semibold text-slate-900 dark:text-slate-100">{leftLabel}</p>
+                        <select
+                          value={selected}
+                          onChange={(event) =>
+                            handleAssociationSelect(currentQuestion.id, leftKey, event.target.value)
+                          }
+                          className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm outline-none focus:border-teal-400 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+                        >
+                          <option value="">Choisir la correspondance</option>
+                          {rightOptions.map(([rightKey, rightLabel]) => (
+                            <option key={`${currentQuestion.id}-${leftKey}-${rightKey}`} value={rightKey}>
+                              {rightLabel}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     );
                   })}
                 </div>
