@@ -30,15 +30,31 @@ const TEST_PROFILES: Record<TestType, { label: string; markdownFiles: string[] }
   },
   stagiaire: {
     label: "Test Stagiaire",
-    markdownFiles: ["quiz1Elec.md", "quiz2Trouble.md", "quiz3PleinPied.md"],
+    markdownFiles: [
+      "quiz1Elec.md",
+      "quiz2Trouble.md",
+      "quiz3PleinPied.md",
+      "quiz5RisqueRoutier.md",
+      "quiz6EPI_EPC.md",
+      "quiz8RisqueRPS.md",
+    ],
   },
   technicien: {
     label: "Test Technicien",
-    markdownFiles: ["quiz4RisqueHauteur.md", "quiz6EPI_EPC.md", "quiz7Amiante.md"],
+    markdownFiles: [
+      "quiz1Elec.md",
+      "quiz2Trouble.md",
+      "quiz3PleinPied.md",
+      "quiz4RisqueHauteur.md",
+      "quiz5RisqueRoutier.md",
+      "quiz6EPI_EPC.md",
+      "quiz7Amiante.md",
+      "quiz8RisqueRPS.md",
+    ],
   },
   "service-administratif": {
     label: "Test Service Administratif",
-    markdownFiles: ["quiz5RisqueRoutier.md", "quiz8RisqueRPS.md"],
+    markdownFiles: ["quiz1Elec.md", "quiz2Trouble.md", "quiz5RisqueRoutier.md", "quiz8RisqueRPS.md"],
   },
 };
 

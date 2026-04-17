@@ -25,7 +25,8 @@ Objectif métier :
 3. Réponse au questionnaire :
    - QCM chargé depuis reponseQCM.csv,
    - questions libres,
-   - question pictogrammes.
+   - question pictogrammes (test accueil).
+   Le type de test dépend du code d'accès (accueil, stagiaire, technicien, service administratif).
 4. Signature candidat.
 5. Vérification finale (résumé des réponses).
 6. Envoi de la soumission au backend.
@@ -36,7 +37,7 @@ Objectif métier :
 1. Connexion via JWT (token + refresh token).
 2. Consultation de la liste des tests avec :
    - recherche,
-   - filtres,
+   - filtres (date, score, statut, type de test),
    - tri,
    - pagination.
 3. Ouverture d'un dossier candidat.
@@ -135,6 +136,13 @@ Deux usages :
 - candidat/résultats : POST /api/pdf (payload fourni)
 - admin : GET /api/admin/tests/<id>/pdf (payload depuis DB)
 
+Le contenu des questions PDF suit les questions réellement affichées au candidat.
+Si un ancien dossier ne contient pas `pdf_payload.questionnaire`, le backend reconstruit le questionnaire depuis `qcm_results` et `free_results`.
+
+Nommage PDF :
+- candidat : NomPrenomTestType.pdf
+- admin : NomPrenomTestTypeId.pdf
+
 Optimisations présentes :
 - compression PDF ReportLab (pageCompression=1),
 - mode preview inline via query preview=1,
@@ -146,6 +154,9 @@ Auth admin :
 - JWT access + refresh,
 - relance automatique sur expiration,
 - stockage local des tokens côté frontend.
+
+Prérequis compte admin :
+- un superuser Django (ou compte admin valide) doit exister pour se connecter au menu admin applicatif.
 
 Permissions backend :
 - endpoints admin protégés (IsAuthenticated),

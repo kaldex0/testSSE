@@ -18,3 +18,13 @@ Commandes rapides frontend:
 npm install
 npm run dev
 ```
+
+Acces au menu admin applicatif (`/admin`):
+
+- Le login utilise un compte utilisateur Django.
+- Si aucun compte admin n'existe, creer un superuser cote backend:
+
+```bash
+cd ../backend
+python manage.py createsuperuser
+```

@@ -23,6 +23,9 @@ Conseil :
 4. Tapez le code donne.
 5. Cliquez sur le bouton "Acceder au test".
 
+Note:
+- le code d'acces determine le type de test affiche (accueil, stagiaire, technicien, service administratif).
+
 Si un message "Code invalide" s'affiche :
 - verifiez que vous avez bien tape le bon code,
 - faites attention aux chiffres,
@@ -101,7 +104,7 @@ Ensuite, vous avez 2 choix :
 Apres "Confirmer et envoyer" :
 - vous arrivez sur la page des resultats,
 - votre score s'affiche,
-- vous pouvez telecharger le PDF.
+- vous pouvez telecharger le PDF (nom du fichier: NomPrenomTestType.pdf).
 
 ## 8. Problemes frequents et solutions simples
 

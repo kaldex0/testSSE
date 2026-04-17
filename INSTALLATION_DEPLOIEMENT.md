@@ -57,7 +57,7 @@ Creer la base PostgreSQL (exemple):
 ```sql
 CREATE DATABASE test_accueil;
 CREATE USER alexandre WITH PASSWORD 'alexdk1183';
-GRANT ALL PRIVILEGES ON DATABASE test_accueil TO user;
+GRANT ALL PRIVILEGES ON DATABASE test_accueil TO alexandre;
 ```
 
 Appliquer les migrations et creer un compte admin:
@@ -66,6 +66,10 @@ Appliquer les migrations et creer un compte admin:
 python manage.py migrate
 python manage.py createsuperuser
 ```
+
+Ce compte superuser sert a:
+- se connecter au menu admin applicatif (`/admin` cote frontend),
+- se connecter a l'admin Django natif (`http://localhost:8000/admin`) en local.
 
 Demarrer l'API:
 
@@ -96,6 +100,7 @@ Frontend disponible sur:
 - Verifier l'envoi vers l'API Django
 - Se connecter a l'admin applicatif via /admin (page web du projet)
 - Tester:
+  - filtres admin (dont type de test)
   - consultation des tests
   - signature animateur
   - previsualisation PDF
@@ -153,6 +158,7 @@ Etapes haut niveau:
 - ALLOWED_HOSTS strict
 - CORS strict (pas de wildcard)
 - Compte admin fort
+- Au moins 1 superuser Django actif (pour le menu admin applicatif)
 - Sauvegardes DB automatiques
 - Monitoring logs backend/frontend
 - Rotation des tokens/credentials

@@ -19,6 +19,12 @@ L'application permet de :
 2. Saisir le code d'accès.
 3. Cliquer sur Accéder au test.
 
+Selon le code saisi, le candidat est orienté vers un type de test:
+- Test accueil
+- Test stagiaire
+- Test technicien
+- Test service administratif
+
 ## 2.2 Renseigner son identité
 
 Avant de commencer les questions, le candidat doit renseigner :
@@ -69,6 +75,19 @@ Après envoi :
 
 ## 3. Parcours administrateur
 
+## 3.0 Prérequis compte admin (obligatoire)
+
+Pour ouvrir le menu admin applicatif (`/admin` côté frontend), il faut un utilisateur Django actif avec droits admin.
+
+Si aucun compte n'existe encore, le créer côté backend:
+
+```bash
+cd backend
+python manage.py createsuperuser
+```
+
+Utiliser ensuite ce compte pour se connecter à l'écran admin applicatif.
+
 ## 3.1 Connexion
 
 1. Aller sur la page admin de l'application.
@@ -78,7 +97,7 @@ Après envoi :
 
 L'administrateur peut :
 - rechercher un candidat,
-- filtrer par date, score et statut,
+- filtrer par date, score, statut et type de test,
 - trier la liste,
 - naviguer avec la pagination.
 
@@ -99,6 +118,12 @@ L'administrateur peut :
 - prévisualiser le PDF,
 - actualiser la prévisualisation,
 - générer le PDF final.
+
+Le PDF généré suit le questionnaire réellement vu par le candidat.
+
+Règles de nommage:
+- côté candidat: `NomPrenomTestType.pdf`
+- côté admin: `NomPrenomTestTypeId.pdf`
 
 ## 4. Règles importantes à retenir
 
