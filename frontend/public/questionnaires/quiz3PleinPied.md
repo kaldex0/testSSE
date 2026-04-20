@@ -6,7 +6,7 @@
 ☒ Vrai
 ❑ Faux
 3-) Reliez les facteurs de risques aux bonnes catégories :
-Matériel et environnement 1 | 3 Réalisation simultanée de plusieurs
+Matériel et environnement 1 | 3 Réalisation simultanée de plusieurs taches
 Tâches et organisation de travail 2 | 1 Absence de balisage
 Comportements individuels 3 | 2 Manque de formation
 4-) Aménager les locaux avec des allées de circulation propres et dégagées permet de réduire les risques de chutes.
