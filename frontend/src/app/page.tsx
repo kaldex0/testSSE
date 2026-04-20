@@ -397,7 +397,7 @@ export default function Home() {
       setShowFinalReview(false);
       return;
     }
-    setAccessError("Code invalidé.");
+    setAccessError("Code invalide.");
   };
 
   const handleRadio = (id: string, value: string) => {
