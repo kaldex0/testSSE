@@ -1,6 +1,6 @@
 "use client";
 
-import type { PointerEvent } from "react";
+import type { PointerEvent, TouchEvent } from "react";
 import { useEffect, useRef } from "react";
 import Image from "next/image";
 
@@ -55,6 +55,18 @@ export default function SignaturePad({ label, value, onChange }: SignaturePadPro
     };
   };
 
+  const getTouchPoint = (event: TouchEvent<HTMLCanvasElement>) => {
+    const touch = event.touches[0] || event.changedTouches[0];
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!touch) {
+      return { x: 0, y: 0 };
+    }
+    return {
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
+    };
+  };
+
   const handlePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     const context = canvas?.getContext("2d");
@@ -87,6 +99,45 @@ export default function SignaturePad({ label, value, onChange }: SignaturePadPro
   };
 
   const handlePointerUp = () => {
+    drawingRef.current = false;
+    lastPointRef.current = null;
+  };
+
+  const handleTouchStart = (event: TouchEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!context) {
+      return;
+    }
+    drawingRef.current = true;
+    const point = getTouchPoint(event);
+    lastPointRef.current = point;
+    context.beginPath();
+    context.moveTo(point.x, point.y);
+  };
+
+  const handleTouchMove = (event: TouchEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    if (!drawingRef.current) {
+      return;
+    }
+    const canvas = canvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!context) {
+      return;
+    }
+    const point = getTouchPoint(event);
+    const last = lastPointRef.current;
+    if (last) {
+      context.lineTo(point.x, point.y);
+      context.stroke();
+      lastPointRef.current = point;
+    }
+  };
+
+  const handleTouchEnd = (event: TouchEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
     drawingRef.current = false;
     lastPointRef.current = null;
   };
@@ -137,6 +188,9 @@ export default function SignaturePad({ label, value, onChange }: SignaturePadPro
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         />
       </div>
       <div className="mt-3 flex flex-wrap gap-2">

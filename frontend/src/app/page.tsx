@@ -1,6 +1,6 @@
 "use client";
 
-import type { PointerEvent } from "react";
+import type { PointerEvent, TouchEvent } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -712,6 +712,22 @@ export default function Home() {
     };
   };
 
+  const getSignatureTouchPoint = (event: TouchEvent<HTMLCanvasElement>) => {
+    const touch = event.touches[0] || event.changedTouches[0];
+    const target = event.currentTarget;
+    const rect = target.getBoundingClientRect();
+    const canvas = signatureCanvasRef.current;
+    if (!touch || !canvas) {
+      return { x: 0, y: 0 };
+    }
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (touch.clientX - rect.left) * scaleX,
+      y: (touch.clientY - rect.top) * scaleY,
+    };
+  };
+
   const handleSignaturePointerDown = (event: PointerEvent<HTMLCanvasElement>) => {
     const canvas = signatureCanvasRef.current;
     const context = canvas?.getContext("2d");
@@ -744,6 +760,45 @@ export default function Home() {
   };
 
   const handleSignaturePointerUp = () => {
+    signatureDrawingRef.current = false;
+    signatureLastPointRef.current = null;
+  };
+
+  const handleSignatureTouchStart = (event: TouchEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!context) {
+      return;
+    }
+    signatureDrawingRef.current = true;
+    const point = getSignatureTouchPoint(event);
+    signatureLastPointRef.current = point;
+    context.beginPath();
+    context.moveTo(point.x, point.y);
+  };
+
+  const handleSignatureTouchMove = (event: TouchEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    if (!signatureDrawingRef.current) {
+      return;
+    }
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!context) {
+      return;
+    }
+    const point = getSignatureTouchPoint(event);
+    const last = signatureLastPointRef.current;
+    if (last) {
+      context.lineTo(point.x, point.y);
+      context.stroke();
+      signatureLastPointRef.current = point;
+    }
+  };
+
+  const handleSignatureTouchEnd = (event: TouchEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
     signatureDrawingRef.current = false;
     signatureLastPointRef.current = null;
   };
@@ -1487,6 +1542,9 @@ export default function Home() {
                       onPointerMove={handleSignaturePointerMove}
                       onPointerUp={handleSignaturePointerUp}
                       onPointerLeave={handleSignaturePointerUp}
+                      onTouchStart={handleSignatureTouchStart}
+                      onTouchMove={handleSignatureTouchMove}
+                      onTouchEnd={handleSignatureTouchEnd}
                     />
                   </div>
                   <div className="flex flex-wrap gap-2">
