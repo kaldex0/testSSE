@@ -338,6 +338,7 @@ export default function Home() {
   const [qcmLoaded, setQcmLoaded] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showFinalReview, setShowFinalReview] = useState(false);
+  const [showUnansweredHighlights, setShowUnansweredHighlights] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("theme");
@@ -625,6 +626,7 @@ export default function Home() {
   useEffect(() => {
     if (unansweredCount === 0 && completionError) {
       setCompletionError("");
+      setShowUnansweredHighlights(false);
     }
   }, [completionError, unansweredCount]);
 
@@ -1036,6 +1038,7 @@ export default function Home() {
     }
     if (unansweredCount > 0) {
       setCompletionError(`Merci de répondre à toutes les questions (${unansweredCount} restante${unansweredCount > 1 ? "s" : ""}).`);
+      setShowUnansweredHighlights(true);
       return;
     }
     if (!participantSignature) {
@@ -1165,22 +1168,30 @@ export default function Home() {
             )}
             <div className="mt-4 grid grid-cols-5 gap-2 sm:mt-6 sm:grid-cols-4 sm:gap-3">
               {allQuestions.map((question, index) => (
-                <button
-                  key={question.id}
-                  type="button"
-                  onClick={() => goToQuestion(index)}
-                  disabled={!isIdentityReady}
-                  className={`flex h-9 items-center justify-center rounded-xl border text-xs font-semibold transition sm:h-10 sm:text-sm ${
-                    index === currentIndex
-                      ? "border-[#e57648] bg-[#e57648]/15 text-[#e57648] shadow-sm"
+                (() => {
+                  const isAnswered = isQuestionAnswered(question);
+                  const highlightMissing = showUnansweredHighlights && !isAnswered;
+                  const buttonClass = index === currentIndex
+                    ? "border-[#e57648] bg-[#e57648]/15 text-[#e57648] shadow-sm"
+                    : highlightMissing
+                      ? "border-rose-500 bg-rose-50 text-rose-700 shadow-sm dark:bg-rose-950/40 dark:text-rose-300"
                       : isDark
                         ? "border-slate-700 text-slate-300 hover:border-[#e57648]"
-                        : "border-slate-500 text-slate-900 hover:border-[#e57648]"
-                  }`}
-                  aria-label={`Aller à la question ${index + 1}`}
-                >
-                  {index + 1}
-                </button>
+                        : "border-slate-500 text-slate-900 hover:border-[#e57648]";
+
+                  return (
+                    <button
+                      key={question.id}
+                      type="button"
+                      onClick={() => goToQuestion(index)}
+                      disabled={!isIdentityReady}
+                      className={`flex h-9 items-center justify-center rounded-xl border text-xs font-semibold transition sm:h-10 sm:text-sm ${buttonClass}`}
+                      aria-label={`Aller à la question ${index + 1}`}
+                    >
+                      {index + 1}
+                    </button>
+                  );
+                })()
               ))}
             </div>
             <button
