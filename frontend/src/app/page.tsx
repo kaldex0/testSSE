@@ -1175,6 +1175,8 @@ export default function Home() {
                     ? "border-[#e57648] bg-[#e57648]/15 text-[#e57648] shadow-sm"
                     : highlightMissing
                       ? "border-rose-500 bg-rose-50 text-rose-700 shadow-sm dark:bg-rose-950/40 dark:text-rose-300"
+                      : isAnswered
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm dark:bg-emerald-950/40 dark:text-emerald-300"
                       : isDark
                         ? "border-slate-700 text-slate-300 hover:border-[#e57648]"
                         : "border-slate-500 text-slate-900 hover:border-[#e57648]";
