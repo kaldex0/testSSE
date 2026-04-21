@@ -882,6 +882,7 @@ export default function Home() {
       { label: "Gestion du stress", keywords: ["stress", "respiration", "calme", "relax", "detente", "coherence", "meditation"] },
       { label: "Ergonomie et posture", keywords: ["ergonomie", "posture", "etirement", "position", "assis", "chaise", "ecran", "hauteur", "postural"] },
       { label: "Hygiène corporelle", keywords: ["douche", "proprete", "se laver", "toilette", "propre"] },
+      { label: "santé", keywords: ["drogue", "alcool", "Non-drogue", "Non-alcool"] },
     ];
 
     const epiCriteria = [
