@@ -697,18 +697,9 @@ export default function Home() {
 
   const getSignaturePoint = (event: PointerEvent<HTMLCanvasElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const canvas = signatureCanvasRef.current;
-    if (!canvas) {
-      return {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      };
-    }
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY,
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
     };
   };
 
@@ -716,15 +707,12 @@ export default function Home() {
     const touch = event.touches[0] || event.changedTouches[0];
     const target = event.currentTarget;
     const rect = target.getBoundingClientRect();
-    const canvas = signatureCanvasRef.current;
-    if (!touch || !canvas) {
+    if (!touch) {
       return { x: 0, y: 0 };
     }
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     return {
-      x: (touch.clientX - rect.left) * scaleX,
-      y: (touch.clientY - rect.top) * scaleY,
+      x: touch.clientX - rect.left,
+      y: touch.clientY - rect.top,
     };
   };
 
